@@ -1,17 +1,33 @@
 mod connector;
 
 use connector::Connector;
+use hyper::{Body, Request};
 
 fn main() {
     println!("Hello, world!");
 
-    // let _ = connector::run();
-    // let _ = connector::run1();
-
     let mut connector = Connector::new();
-    connector.push_uri("http://naver.com".parse().unwrap());
-    connector.push_uri("http://daum.net".parse().unwrap());
-    connector.push_uri("http://google.com".parse().unwrap());
+    connector.push_uri(
+        Request::builder()
+            .method("GET")
+            .uri("http://naver.com")
+            .body(Body::empty())
+            .unwrap(),
+    );
+    connector.push_uri(
+        Request::builder()
+            .method("GET")
+            .uri("http://daum.net")
+            .body(Body::empty())
+            .unwrap(),
+    );
+    connector.push_uri(
+        Request::builder()
+            .method("GET")
+            .uri("http://google.com")
+            .body(Body::empty())
+            .unwrap(),
+    );
 
     let _ = connector.connect();
 }
