@@ -6,8 +6,10 @@ use hyper::{Body, Request};
 fn main() {
     println!("Hello, world!");
 
-    let mut connector = Connector::<dyn Fn(Body)>::default();
-    connector.handler(|body: Body| {});
+    let mut connector = Connector::default();
+    connector.handler(|index: usize, _body: Body| {
+        println!("in callback index : {}", index);
+    });
     connector.push_request(
         Request::builder()
             .method("GET")
