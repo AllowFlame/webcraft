@@ -1,30 +1,22 @@
 use std::future::Future;
 
 use hyper::client::HttpConnector;
-use hyper::{Body, Client, Request, Response};
+use hyper::{Body, Client, Request};
 use hyper_tls::HttpsConnector;
 
 pub struct Craft {
     client: Client<HttpsConnector<HttpConnector>>,
-    reqs: Vec<Request<Body>>,
 }
 
 impl Default for Craft {
     fn default() -> Self {
         let https = HttpsConnector::new();
         let client = Client::builder().build::<_, Body>(https);
-        Craft {
-            client,
-            reqs: Vec::new(),
-        }
+        Craft { client }
     }
 }
 
 impl Craft {
-    pub fn push_request(&mut self, request: Request<Body>) {
-        (&mut self.reqs).push(request);
-    }
-
     pub async fn visit(&self, request: Request<Body>) -> hyper::Result<Body> {
         let resp = (&self.client).request(request).await?;
         hyper::Result::Ok(resp.into_body())
@@ -60,22 +52,4 @@ impl Craft {
             .map(|bytes| bytes.to_vec())
             .map(|vec| String::from_utf8(vec).unwrap_or("".to_owned()))
     }
-
-    pub async fn handle_result(resp: hyper::Result<Body>) {}
 }
-
-// pub trait ResultHandler {
-//     fn handle<F: Future, H: Fn(usize, Body) -> F>() -> H;
-// }
-
-// struct Handler;
-
-// impl Handler {
-//     async fn on_handle(index: usize, body: Body) {}
-// }
-
-// impl ResultHandler for Handler {
-//     fn handle<F: Future, H: Fn(usize, Body) -> F>() -> H {
-//         Handler::on_handle
-//     }
-// }
