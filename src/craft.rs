@@ -29,10 +29,7 @@ impl Craft {
     ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
         let mut results = Vec::new();
         for req in requests {
-            let res = async {
-                let resp = self.client.request(req).await?;
-                hyper::Result::Ok(resp.into_body())
-            };
+            let res = self.visit(req);
             results.push(res);
         }
 
@@ -51,5 +48,32 @@ impl Craft {
             .await
             .map(|bytes| bytes.to_vec())
             .map(|vec| String::from_utf8(vec).unwrap_or("".to_owned()))
+    }
+
+    pub async fn save_body(mut body: Body, file_name: &str) {
+        use hyper::body::HttpBody;
+        use std::fs;
+        use std::io::Write;
+        use std::path::PathBuf;
+
+        let path = PathBuf::from(file_name);
+        path.parent().and_then(|parent_path| {
+            if !parent_path.exists() {
+                fs::create_dir_all(parent_path).ok()
+            } else {
+                Some(())
+            }
+        });
+
+        let mut file = fs::File::create(file_name).expect("file error");
+        'stream: while let Some(piece) = body.data().await {
+            let chunk = match piece {
+                Ok(piece) => piece,
+                Err(_err) => {
+                    break 'stream;
+                }
+            };
+            file.write_all(&chunk).unwrap();
+        }
     }
 }

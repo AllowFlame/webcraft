@@ -3,8 +3,8 @@ mod craft;
 
 use connector::Connector;
 use craft::Craft;
-use hyper::{Body, Request};
 use hyper::body::HttpBody;
+use hyper::{Body, Request};
 use std::future::Future;
 use tokio::io::{self, AsyncWriteExt as _};
 
@@ -18,10 +18,11 @@ async fn handle(index: usize, mut body: Body) {
     // let s = Craft::body_to_string(body).await.unwrap_or("".to_owned());
 
     // println!("out : {}, {}", index, s.as_str());
-    while let Some(next) = body.data().await {
-        let chunk = next.unwrap();
-        io::stdout().write_all(&chunk).await.unwrap();
-    }
+    // while let Some(next) = body.data().await {
+    //     let chunk = next.unwrap();
+    //     io::stdout().write_all(&chunk).await.unwrap();
+    // }
+    Craft::save_body(body, "123").await;
 }
 
 #[tokio::main]
@@ -30,8 +31,8 @@ async fn run() -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
 
     let req = Request::builder()
         .method("GET")
-        .uri("https://cdn.hiyobi.me/data/json/1681767_list.json")
-        // .uri("https://getmiso.com")
+        // .uri("https://cdn.hiyobi.me/data/json/1681767_list.json")
+        .uri("https://getmiso.com")
         .body(Body::empty())
         .unwrap();
 
