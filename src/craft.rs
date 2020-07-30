@@ -55,6 +55,7 @@ impl Craft {
         use std::fs;
         use std::io::Write;
         use std::path::PathBuf;
+        use std::io::{Error, ErrorKind};
 
         let path = PathBuf::from(file_name);
         path.parent().and_then(|parent_path| {
@@ -67,13 +68,16 @@ impl Craft {
 
         let mut file = fs::File::create(file_name).expect("file error");
         'stream: while let Some(piece) = body.data().await {
-            let chunk = match piece {
-                Ok(piece) => piece,
-                Err(_err) => {
-                    break 'stream;
-                }
-            };
-            file.write_all(&chunk).unwrap();
+            let save_result = piece.map_err(|_err| {
+                Error::new(ErrorKind::Other, "response body chunk error")
+            }).and_then(|chunk| {
+                file.write_all(&chunk)
+            });
+
+            match save_result {
+                Ok(_) => continue,
+                Err(_err) => break 'stream,
+            }
         }
     }
 }
