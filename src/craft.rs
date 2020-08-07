@@ -4,43 +4,26 @@ use hyper::client::HttpConnector;
 use hyper::{Body, Client, Request};
 use hyper_tls::HttpsConnector;
 
-pub struct Craft {
+pub struct Craft<T> {
     client: Client<HttpsConnector<HttpConnector>>,
+    tagger: Option<T>,
 }
 
-impl Default for Craft {
+impl<T> Default for Craft<T> {
     fn default() -> Self {
         let https = HttpsConnector::new();
         let client = Client::builder().build::<_, Body>(https);
-        Craft { client }
+        Craft {
+            client,
+            tagger: None,
+        }
     }
 }
 
-impl Craft {
+impl<T> Craft<T> {
     pub async fn visit(&self, request: Request<Body>) -> hyper::Result<Body> {
         let resp = (&self.client).request(request).await?;
         hyper::Result::Ok(resp.into_body())
-    }
-
-    pub async fn visit_all<F: Future, H: Fn(usize, Body) -> F>(
-        &self,
-        requests: Vec<Request<Body>>,
-        handler: H,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let mut results = Vec::new();
-        for req in requests {
-            let res = self.visit(req);
-            results.push(res);
-        }
-
-        let mut index: usize = 0;
-        let bodies = futures::future::join_all(results).await;
-        for body in bodies {
-            handler(index, body?).await;
-            index = index + 1;
-        }
-
-        Ok(())
     }
 
     pub async fn body_to_string(body: Body) -> hyper::Result<String> {
@@ -54,8 +37,8 @@ impl Craft {
         use hyper::body::HttpBody;
         use std::fs;
         use std::io::Write;
-        use std::path::PathBuf;
         use std::io::{Error, ErrorKind};
+        use std::path::PathBuf;
 
         let path = PathBuf::from(file_name);
         path.parent().and_then(|parent_path| {
@@ -68,16 +51,46 @@ impl Craft {
 
         let mut file = fs::File::create(file_name).expect("file error");
         'stream: while let Some(piece) = body.data().await {
-            let save_result = piece.map_err(|_err| {
-                Error::new(ErrorKind::Other, "response body chunk error")
-            }).and_then(|chunk| {
-                file.write_all(&chunk)
-            });
+            let save_result = piece
+                .map_err(|_err| Error::new(ErrorKind::Other, "response body chunk error"))
+                .and_then(|chunk| file.write_all(&chunk));
 
             match save_result {
                 Ok(_) => continue,
                 Err(_err) => break 'stream,
             }
         }
+    }
+}
+
+impl<T> Craft<T>
+where
+    T: Fn() -> String,
+{
+    pub fn new(tagger: Option<T>) -> Craft<T> {
+        let https = HttpsConnector::new();
+        let client = Client::builder().build::<_, Body>(https);
+        Craft { client, tagger }
+    }
+
+    pub async fn visit_all<'a, F: Future, H: Fn(usize, Body, Option<&'a T>) -> F>(
+        &'a self,
+        requests: Vec<Request<Body>>,
+        handler: H,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+        let mut results = Vec::new();
+        for req in requests {
+            let res = self.visit(req);
+            results.push(res);
+        }
+
+        let mut index: usize = 0;
+        let bodies = futures::future::join_all(results).await;
+        for body in bodies {
+            handler(index, body?, self.tagger.as_ref()).await;
+            index = index + 1;
+        }
+
+        Ok(())
     }
 }
