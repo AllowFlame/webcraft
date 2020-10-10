@@ -1,7 +1,9 @@
+use std::error::Error;
+use std::fmt;
 use std::future::Future;
 
 use hyper::client::HttpConnector;
-use hyper::{Body, Client, Request};
+use hyper::{Body, Client, Request, Response};
 use hyper_tls::HttpsConnector;
 
 pub struct Craft<T> {
@@ -21,9 +23,27 @@ impl<T> Default for Craft<T> {
 }
 
 impl<T> Craft<T> {
-    pub async fn visit(&self, request: Request<Body>) -> hyper::Result<Body> {
-        let resp = (&self.client).request(request).await?;
-        hyper::Result::Ok(resp.into_body())
+    pub async fn visit(&self, request: Request<Body>) -> Result<Body, CraftError> {
+        self.request(request, &|resp: Response<Body>| {
+            Result::Ok(resp.into_body())
+        })
+        .await
+    }
+
+    pub async fn request<V, HF>(
+        &self,
+        request: Request<Body>,
+        response_handler: &HF,
+    ) -> Result<V, CraftError>
+    where
+        HF: Fn(Response<Body>) -> Result<V, CraftError>,
+    {
+        let resp = (&self.client)
+            .request(request)
+            .await
+            .map_err(|_err| CraftError::HyperConnector)?;
+
+        response_handler(resp)
     }
 
     pub async fn body_to_string(body: Body) -> hyper::Result<String> {
@@ -92,5 +112,56 @@ where
         }
 
         Ok(())
+    }
+
+    pub async fn request_all<'a, V, F, HF, RH>(
+        &'a self,
+        requests: Vec<Request<Body>>,
+        response_handler: HF,
+        result_handler: RH,
+    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>>
+    where
+        F: Future,
+        HF: Fn(Response<Body>) -> Result<V, CraftError>,
+        RH: Fn(usize, Result<V, CraftError>, Option<&'a T>) -> F,
+    {
+        let mut response_results = Vec::new();
+        for req in requests {
+            let res = self.request(req, &response_handler);
+            response_results.push(res);
+        }
+
+        let mut index: usize = 0;
+        let results = futures::future::join_all(response_results).await;
+        for result in results {
+            result_handler(index, result, self.tagger.as_ref()).await;
+            index = index + 1;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Debug)]
+pub enum CraftError {
+    HyperConnector,
+    WrongResponseHandling,
+}
+
+impl fmt::Display for CraftError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match *self {
+            CraftError::HyperConnector => write!(f, "HyperConnector"),
+            CraftError::WrongResponseHandling => write!(f, "WrongResponseHandling"),
+        }
+    }
+}
+
+impl Error for CraftError {
+    fn description(&self) -> &str {
+        match *self {
+            CraftError::HyperConnector => "HyperConnector",
+            CraftError::WrongResponseHandling => "WrongResponseHandling",
+        }
     }
 }
