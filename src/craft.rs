@@ -23,14 +23,7 @@ impl<T> Default for Craft<T> {
 }
 
 impl<T> Craft<T> {
-    pub async fn visit(&self, request: Request<Body>) -> Result<Body, CraftError> {
-        self.request(request, &|resp: Response<Body>| {
-            Result::Ok(resp.into_body())
-        })
-        .await
-    }
-
-    pub async fn request<V, HF>(
+    pub async fn visit<V, HF>(
         &self,
         request: Request<Body>,
         response_handler: &HF,
@@ -93,28 +86,7 @@ where
         Craft { client, tagger }
     }
 
-    pub async fn visit_all<'a, F: Future, H: Fn(usize, Body, Option<&'a T>) -> F>(
-        &'a self,
-        requests: Vec<Request<Body>>,
-        handler: H,
-    ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
-        let mut results = Vec::new();
-        for req in requests {
-            let res = self.visit(req);
-            results.push(res);
-        }
-
-        let mut index: usize = 0;
-        let bodies = futures::future::join_all(results).await;
-        for body in bodies {
-            handler(index, body?, self.tagger.as_ref()).await;
-            index = index + 1;
-        }
-
-        Ok(())
-    }
-
-    pub async fn request_all<'a, V, F, HF, RH>(
+    pub async fn visit_all<'a, V, F, HF, RH>(
         &'a self,
         requests: Vec<Request<Body>>,
         response_handler: HF,
@@ -127,7 +99,7 @@ where
     {
         let mut response_results = Vec::new();
         for req in requests {
-            let res = self.request(req, &response_handler);
+            let res = self.visit(req, &response_handler);
             response_results.push(res);
         }
 
