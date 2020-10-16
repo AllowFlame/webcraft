@@ -1,20 +1,23 @@
 use std::error::Error;
 use std::fmt;
 use std::future::Future;
+use std::time::Duration;
 
 use hyper::client::HttpConnector;
 use hyper::{Body, Client, Request, Response};
+use hyper_timeout::TimeoutConnector;
 use hyper_tls::HttpsConnector;
 
 pub struct Craft<T> {
-    client: Client<HttpsConnector<HttpConnector>>,
+    client: Client<TimeoutConnector<HttpsConnector<HttpConnector>>>,
     tagger: Option<T>,
 }
 
 impl<T> Default for Craft<T> {
     fn default() -> Self {
         let https = HttpsConnector::new();
-        let client = Client::builder().build::<_, Body>(https);
+        let connector = TimeoutConnector::new(https);
+        let client = Client::builder().build::<_, Body>(connector);
         Craft {
             client,
             tagger: None,
@@ -80,9 +83,14 @@ impl<T> Craft<T>
 where
     T: Fn() -> String,
 {
-    pub fn new(tagger: Option<T>) -> Craft<T> {
+    pub fn new(timeout: Option<Duration>, tagger: Option<T>) -> Craft<T> {
         let https = HttpsConnector::new();
-        let client = Client::builder().build::<_, Body>(https);
+        let mut connector = TimeoutConnector::new(https);
+        connector.set_connect_timeout(timeout);
+        connector.set_read_timeout(timeout);
+        connector.set_write_timeout(timeout);
+
+        let client = Client::builder().build::<_, Body>(connector);
         Craft { client, tagger }
     }
 
@@ -105,11 +113,14 @@ where
 
         let mut index: usize = 0;
         let results = futures::future::join_all(response_results).await;
+
+        let mut handle_result = Vec::new();
         for result in results {
-            result_handler(index, result, self.tagger.as_ref()).await;
+            handle_result.push(result_handler(index, result, self.tagger.as_ref()));
             index = index + 1;
         }
 
+        let _ = futures::future::join_all(handle_result).await;
         Ok(())
     }
 }
@@ -121,10 +132,10 @@ pub enum CraftError {
 }
 
 impl fmt::Display for CraftError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
         match *self {
-            CraftError::HyperConnector => write!(f, "HyperConnector"),
-            CraftError::WrongResponseHandling => write!(f, "WrongResponseHandling"),
+            CraftError::HyperConnector => write!(formatter, "HyperConnector"),
+            CraftError::WrongResponseHandling => write!(formatter, "WrongResponseHandling"),
         }
     }
 }
