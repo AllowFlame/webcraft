@@ -99,7 +99,7 @@ impl Craft {
         &'a self,
         results: Vec<Result<V, CraftError>>,
         result_handler: RH,
-    ) -> CraftResult
+    ) -> CraftResult<()>
     where
         F: Future,
         RH: Fn(usize, Result<V, CraftError>) -> F,
@@ -127,7 +127,7 @@ impl Craft {
         mut body: Body,
         file_name: &str,
         file_observer: Option<Box<dyn SaveFileObserver>>,
-    ) -> CraftResult {
+    ) -> CraftResult<()> {
         use hyper::body::HttpBody;
         use std::io::Write;
         use std::io::{Error, ErrorKind};
@@ -176,7 +176,7 @@ impl Craft {
     }
 }
 
-type CraftResult = Result<(), CraftError>;
+pub type CraftResult<T> = Result<T, CraftError>;
 
 #[derive(Debug)]
 pub enum CraftError {
