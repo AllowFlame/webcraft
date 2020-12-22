@@ -66,9 +66,9 @@ impl Craft {
         &self,
         request: Request<Body>,
         response_handler: &HF,
-    ) -> Result<V, CraftError>
+    ) -> CraftResult<V>
     where
-        HF: Fn(Response<Body>) -> Result<V, CraftError>,
+        HF: Fn(Response<Body>) -> CraftResult<V>,
     {
         let resp = (&self.client)
             .request(request)
@@ -82,9 +82,9 @@ impl Craft {
         &'a self,
         requests: Vec<Request<Body>>,
         response_handler: HF,
-    ) -> Vec<Result<V, CraftError>>
+    ) -> Vec<CraftResult<V>>
     where
-        HF: Fn(Response<Body>) -> Result<V, CraftError>,
+        HF: Fn(Response<Body>) -> CraftResult<V>,
     {
         let mut response_results = Vec::new();
         for req in requests {
@@ -99,7 +99,7 @@ impl Craft {
         &'a self,
         results: Vec<Result<V, CraftError>>,
         result_handler: RH,
-    ) -> CraftResult
+    ) -> CraftResult<()>
     where
         F: Future,
         RH: Fn(usize, Result<V, CraftError>) -> F,
@@ -115,7 +115,7 @@ impl Craft {
         Ok(())
     }
 
-    pub async fn body_to_string(body: Body) -> Result<String, CraftError> {
+    pub async fn body_to_string(body: Body) -> CraftResult<String> {
         hyper::body::to_bytes(body)
             .await
             .map(|bytes| bytes.to_vec())
@@ -127,7 +127,7 @@ impl Craft {
         mut body: Body,
         file_name: &str,
         file_observer: Option<Box<dyn SaveFileObserver>>,
-    ) -> CraftResult {
+    ) -> CraftResult<()> {
         use hyper::body::HttpBody;
         use std::io::Write;
         use std::io::{Error, ErrorKind};
@@ -176,7 +176,7 @@ impl Craft {
     }
 }
 
-type CraftResult = Result<(), CraftError>;
+pub type CraftResult<T> = Result<T, CraftError>;
 
 #[derive(Debug)]
 pub enum CraftError {
