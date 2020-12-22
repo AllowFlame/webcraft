@@ -3,6 +3,8 @@ use std::fmt;
 use std::future::Future;
 use std::time::Duration;
 
+use std::fs;
+
 use hyper::client::HttpConnector;
 use hyper::{Body, Client, Request, Response};
 use hyper_timeout::TimeoutConnector;
@@ -32,6 +34,10 @@ impl TimeoutSet {
             write,
         }
     }
+}
+
+pub trait SaveFileObserver {
+    fn on_save(&self, file: &fs::File);
 }
 
 pub struct Craft {
@@ -117,9 +123,12 @@ impl Craft {
             .map_err(|_err| CraftError::HyperBodyHandling)
     }
 
-    pub async fn save_body(mut body: Body, file_name: &str) -> CraftResult {
+    pub async fn save_body(
+        mut body: Body,
+        file_name: &str,
+        file_observer: Option<Box<dyn SaveFileObserver>>,
+    ) -> CraftResult {
         use hyper::body::HttpBody;
-        use std::fs;
         use std::io::Write;
         use std::io::{Error, ErrorKind};
         use std::path::PathBuf;
@@ -133,12 +142,18 @@ impl Craft {
             }
         });
 
+        let observer = file_observer.as_ref();
+
         let mut file = fs::File::create(file_name).map_err(|_err| CraftError::FileHandling)?;
         let mut ret_val = Ok(());
         'stream: while let Some(piece) = body.data().await {
             let save_result = piece
                 .map_err(|_err| Error::new(ErrorKind::Other, "response body chunk error"))
                 .and_then(|chunk| file.write_all(&chunk));
+
+            if let Some(callback) = observer {
+                callback.on_save(&file);
+            }
 
             match save_result {
                 Ok(_) => continue,
