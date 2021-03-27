@@ -8,7 +8,7 @@ edition = "2018"
 
 [dependencies]
 hyper = { version = "0.14.4", features = ["full"] }
-hyper-timeout = "0.4"
+hyper-timeout = "0.4.1"
 hyper-tls = "0.5"
 futures = "0.3"
 
