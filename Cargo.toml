@@ -10,7 +10,7 @@ edition = "2018"
 hyper = { version = "0.14.17", features = ["full"] }
 hyper-timeout = "0.4.1"
 hyper-tls = "0.5"
-futures = "0.3.19"
+futures = "0.3.21"
 
 [lib]
 name = "webcraft"
